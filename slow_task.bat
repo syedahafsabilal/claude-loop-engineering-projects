@@ -1,7 +1,8 @@
 @echo off
+echo started at %date% %time% > started.txt
 echo Starting slow task...
 echo Waiting 3 minutes...
-timeout /t 180 /nobreak
+ping 127.0.0.1 -n 181 >nul
 echo Writing completion file...
 echo done at %date% %time% > task_complete.txt
 echo Task complete!
