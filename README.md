@@ -116,7 +116,7 @@ The `/loop` command itself runs indefinitely until manually stopped. The `check_
 
 This course assignment specifically teaches you to use Claude Code's `/loop` feature because:
 
-- **In-session monitoring:** The loop runs only while your Claude Code session is active
+- **Persistent scheduling:** The cron job persists independently of the session for up to 7 days (auto-expires) unless manually cancelled
 - **Recurring execution:** `/loop` automatically repeats the check every 60 seconds
 - **Hands-off operation:** You don't need to manually trigger each check
 - **Real-world pattern:** This mirrors how you'd monitor deployments, builds, or long-running tests
@@ -127,21 +127,23 @@ The combination of `/loop` (for the heartbeat) + `check_loop.sh` (for the bounde
 
 | What You Want | Command to Type |
 |---------------|----------------|
-| Clean up previous run | `rm -f started.txt task_complete.txt check_count.txt` |
+| Clean up previous run | `rm -f started.txt task_complete.txt check_count.txt monitoring_done.txt` |
 | Start the background task | `Start slow_task.sh in the background` |
 | Start the monitoring loop | `/loop 60s bash check_loop.sh` |
-| Stop the loop | `/stop` |
+| Stop the loop manually | `CronDelete <job-id>` |
 | Check if task started | `cat started.txt` |
 | Check current status manually | `bash check_loop.sh` |
+| List active cron jobs | `List all active cron jobs` |
 
 ## Safety Limits
 
 - **Maximum checks:** 15
 - **Check interval:** 60 seconds  
 - **Total timeout:** ~15 minutes (900 seconds)
-- **Stop method:** Manual via `/stop` command or UI
+- **Stop method:** `CronDelete <job-id>` (manual) or Claude automatically cancels when watching actively
+- **State protection:** After completion/timeout, `monitoring_done.txt` makes subsequent cron fires harmless no-ops
 
-The monitoring will not continue indefinitely. After 15 checks without finding the completion file, `check_loop.sh` reports a timeout and instructs you to stop the loop.
+The monitoring will not continue indefinitely. After 15 checks without finding the completion file, `check_loop.sh` reports a timeout, writes the state file, and Claude (if watching) will cancel the cron job.
 
 ## Technical Notes: Background Task Launch
 
