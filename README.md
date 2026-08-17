@@ -89,25 +89,28 @@ done at [timestamp]
 ✓ Loop completed successfully. STOP THE LOOP NOW.
 ```
 
-### Step 5: Stop the /loop
+### Step 5: Loop Termination (Hybrid Approach)
 
-When you see the success message or timeout message, manually stop the loop by typing:
-```
-/stop
-```
+When monitoring completes (either success or timeout), the loop stops through a **hybrid mechanism**:
 
-Or use the Claude Code interface to stop the running loop.
+1. **State file:** `check_loop.sh` writes `monitoring_done.txt` when complete, making all subsequent cron fires harmless no-ops
+2. **Claude actively watches:** If Claude is actively engaged in the session and sees the completion message, Claude will immediately call `CronDelete` to stop the cron job
+3. **Manual fallback:** If Claude doesn't catch it (e.g., you ran the check manually outside cron context), you can manually run `CronDelete <job-id>` or use `/stop`
+
+**In an active demonstration**, Claude should notice completion and cancel the job automatically. **In unattended monitoring**, the state file prevents repeated outputs but the cron continues firing until manually stopped.
 
 ## How the Safety Limit Works
 
-The `/loop` command itself runs indefinitely until manually stopped. To add a safety limit, the `check_loop.sh` script tracks state:
+The `/loop` command itself runs indefinitely until manually stopped. The `check_loop.sh` script implements bounded monitoring through state tracking:
 
 1. **Counter file:** `check_count.txt` stores how many checks have been performed
-2. **Increment on each check:** The script reads the counter, increments it, and saves it
-3. **Limit enforcement:** After 15 checks, the script reports timeout and tells you to stop
-4. **Manual stop required:** You must run `/stop` or stop the loop through the UI
+2. **State file:** `monitoring_done.txt` marks when monitoring is complete (success or timeout)
+3. **Increment on each check:** The script reads the counter, increments it, and saves it
+4. **Completion detection:** When `task_complete.txt` appears, the script writes the state file and reports success
+5. **Limit enforcement:** After 15 checks without finding the file, the script writes the state file and reports timeout
+6. **No-op on repeat:** Once the state file exists, subsequent cron fires exit immediately as harmless no-ops
 
-This combines `/loop`'s recurring execution with a bounded monitoring pattern.
+**Key limitation:** The bash script cannot directly call `CronDelete` to terminate its own cron job. It can only mark itself complete and become a no-op. Actual cron termination requires either Claude (watching actively) or manual user intervention with `CronDelete`.
 
 ## Why We Use /loop for This Assignment
 
