@@ -1,161 +1,184 @@
 # Claude Loop Practice
 
-A demonstration of autonomous background task monitoring in a Windows/bash hybrid environment. This project shows how to launch a long-running task in the background and poll for its completion without blocking the current session.
+**Course Assignment:** Project 1 - In-Session Loop Monitoring (Concept 4)
 
-## What It Does
+A hands-on project to practice using Claude Code's `/loop` feature for autonomous background task monitoring.
 
-This project simulates a common automation pattern: start a slow background task (e.g., a build, deployment, or long computation), then periodically check whether it's finished. Instead of blocking for 3 minutes or requiring manual checking, an automated monitoring loop polls every 60 seconds and reports success when the task completes.
+## What This Project Demonstrates
+
+This project teaches you how to use Claude Code's `/loop` command to monitor a long-running task. You'll learn how four components work together:
+
+1. **Long-running background task** (`slow_task.sh`) - simulates a 3-minute process
+2. **Claude Code's `/loop`** - provides the recurring heartbeat that checks every 60 seconds
+3. **Completion condition** - detects when `task_complete.txt` appears
+4. **Safety limit** - automatically stops after 15 checks (~15 minutes) if the task never completes
 
 ## Files
 
-### Task Files
-
-- **`slow_task.bat`** - Windows batch version of the slow task
-  - Writes `started.txt` marker immediately on launch
-  - Waits 3 minutes using `ping 127.0.0.1 -n 181` (non-interactive delay)
+### Background Task
+- **`slow_task.sh`** - The simulated long-running task
+  - Writes `started.txt` immediately on launch (diagnostic marker)
+  - Waits 3 minutes using `sleep 180`
   - Writes `task_complete.txt` with timestamp when done
-  - *Note:* Uses `ping` instead of `timeout /nobreak` because timeout requires console interaction
 
-- **`slow_task.sh`** - Bash version of the slow task (working implementation)
-  - Same behavior as batch version but works reliably in this environment
-  - Uses `sleep 180` for the 3-minute delay
-  - Successfully creates marker files when launched via Bash tool's `run_in_background` flag
+### Monitoring Scripts
+- **`check_loop.sh`** - The monitoring script called by `/loop`
+  - Tracks how many checks have been performed using `check_count.txt`
+  - Checks for `task_complete.txt` on each run
+  - Reports success when file is found
+  - Reports timeout after 15 checks
+  - Tells you when to stop the loop
 
-### Monitoring
+### Legacy Files (for reference)
+- `slow_task.bat` - Windows batch version (doesn't work reliably in this environment)
+- `check_task.bat` - Windows batch monitoring script (replaced by check_loop.sh)
 
-- **`check_task.bat`** - Windows batch monitoring script
-  - Loops up to 15 times, checking for `task_complete.txt` every 60 seconds
-  - Prints file contents and exits successfully when found
-  - Reports timeout if 15 checks complete without finding the file
+## How to Run This Project
 
-- **Inline bash monitoring loop** - The working implementation
-  - Same logic as check_task.bat but executed directly in bash
-  - Successfully detected completion on check 4 (~3 minutes)
+Follow these exact steps to demonstrate Project 1:
 
-## How to Run
+### Step 1: Clean Up from Previous Runs
 
-### Working Method (Bash Script)
+In Claude Code chat, type:
+```
+rm -f started.txt task_complete.txt check_count.txt
+```
 
-1. Clean up any previous runs:
-   ```bash
-   rm -f started.txt task_complete.txt
-   ```
+### Step 2: Start the Long-Running Background Task
 
-2. Launch the background task using the Bash tool's background execution:
-   ```bash
-   ./slow_task.sh &
-   # (or use Bash tool with run_in_background=true)
-   ```
+In Claude Code chat, type:
+```
+Start slow_task.sh in the background
+```
 
-3. Verify it started:
-   ```bash
-   cat started.txt
-   ```
+Claude will launch it using the Bash tool with `run_in_background: true`.
 
-4. Run the monitoring loop:
-   ```bash
-   max_checks=15
-   check_count=0
-   
-   while [ $check_count -lt $max_checks ]; do
-       check_count=$((check_count + 1))
-       echo "Check $check_count/$max_checks: Looking for task_complete.txt..."
-       
-       if [ -f task_complete.txt ]; then
-           echo ""
-           echo "=== File found! Contents: ==="
-           cat task_complete.txt
-           echo ""
-           echo "Loop completed successfully."
-           exit 0
-       fi
-       
-       echo "Not found yet. Waiting 60 seconds..."
-       sleep 60
-   done
-   
-   echo "=== LIMIT HIT: Checked $max_checks times, file never appeared ==="
-   ```
+Verify it started by typing:
+```
+cat started.txt
+```
+
+You should see a timestamp showing when the task started.
+
+### Step 3: Start the /loop Monitoring
+
+In Claude Code chat, type this **exact command**:
+```
+/loop 60s bash check_loop.sh
+```
+
+This tells Claude Code to:
+- Run `bash check_loop.sh` every 60 seconds
+- Keep running until you manually stop it or the script indicates completion
+
+### Step 4: Watch the Monitoring
+
+Claude Code will now check every 60 seconds. You'll see output like:
+```
+Check 1/15: Looking for task_complete.txt...
+Not found yet. Waiting for next check (60s)...
+```
+
+After ~3 minutes (around check 3 or 4), you'll see:
+```
+Check 4/15: Looking for task_complete.txt...
+
+=== SUCCESS: File found! Contents: ===
+done at [timestamp]
+
+✓ Loop completed successfully. STOP THE LOOP NOW.
+```
+
+### Step 5: Stop the /loop
+
+When you see the success message or timeout message, manually stop the loop by typing:
+```
+/stop
+```
+
+Or use the Claude Code interface to stop the running loop.
+
+## How the Safety Limit Works
+
+The `/loop` command itself runs indefinitely until manually stopped. To add a safety limit, the `check_loop.sh` script tracks state:
+
+1. **Counter file:** `check_count.txt` stores how many checks have been performed
+2. **Increment on each check:** The script reads the counter, increments it, and saves it
+3. **Limit enforcement:** After 15 checks, the script reports timeout and tells you to stop
+4. **Manual stop required:** You must run `/stop` or stop the loop through the UI
+
+This combines `/loop`'s recurring execution with a bounded monitoring pattern.
+
+## Why We Use /loop for This Assignment
+
+This course assignment specifically teaches you to use Claude Code's `/loop` feature because:
+
+- **In-session monitoring:** The loop runs only while your Claude Code session is active
+- **Recurring execution:** `/loop` automatically repeats the check every 60 seconds
+- **Hands-off operation:** You don't need to manually trigger each check
+- **Real-world pattern:** This mirrors how you'd monitor deployments, builds, or long-running tests
+
+The combination of `/loop` (for the heartbeat) + `check_loop.sh` (for the bounded logic) demonstrates how to safely use recurring loops with automatic stop conditions.
+
+## Key Commands Reference
+
+| What You Want | Command to Type |
+|---------------|----------------|
+| Clean up previous run | `rm -f started.txt task_complete.txt check_count.txt` |
+| Start the background task | `Start slow_task.sh in the background` |
+| Start the monitoring loop | `/loop 60s bash check_loop.sh` |
+| Stop the loop | `/stop` |
+| Check if task started | `cat started.txt` |
+| Check current status manually | `bash check_loop.sh` |
 
 ## Safety Limits
 
 - **Maximum checks:** 15
-- **Check interval:** 60 seconds
+- **Check interval:** 60 seconds  
 - **Total timeout:** ~15 minutes (900 seconds)
+- **Stop method:** Manual via `/stop` command or UI
 
-The monitoring loop will not run indefinitely. After 15 checks without finding the completion file, it reports a timeout and exits with an error code.
+The monitoring will not continue indefinitely. After 15 checks without finding the completion file, `check_loop.sh` reports a timeout and instructs you to stop the loop.
 
-## Why This Uses an Inline Bash Loop (Not /loop)
+## Technical Notes: Background Task Launch
 
-This project implements an **in-session bounded monitoring loop** using inline bash code. While Claude Code offers a `/loop` command for recurring tasks, it's not the right tool for this use case.
+### The Challenge
 
-### What /loop Is For
+In a Windows environment with Git Bash, launching Windows batch files as detached background processes is unreliable. Several approaches failed:
 
-The `/loop` command is designed for **recurring, indefinite tasks** that run on a schedule:
-- Checking deployment status every hour
-- Running health checks every 30 minutes
-- Periodic standup reports
-- Tasks that repeat until manually stopped
-
-By default, `/loop` tasks are session-only (they stop when you close Claude Code), but they can also be made durable to survive across sessions.
-
-### Why /loop Doesn't Fit Bounded Monitoring
-
-This project needs **bounded monitoring with stop conditions:**
-1. **Stop when file is found** - success condition
-2. **Stop after 15 checks** - timeout/failure condition
-3. **Single-purpose** - not recurring across multiple task runs
-
-`/loop` would try to run the check indefinitely on an interval, with no way to encode "stop when the file appears" or "give up after 15 attempts." The check would repeat forever (or until manually stopped), which isn't the desired behavior for monitoring a single task completion.
-
-### The Right Solution: Inline Bash Loop
-
-The inline bash monitoring loop is the correct implementation because it:
-- **Is in-session** - tied to the current Claude Code conversation
-- **Has bounded execution** - exactly 15 checks maximum
-- **Has stop conditions** - exits on success (file found) or failure (timeout)
-- **Reports outcomes** - clearly states whether completion was detected or limit hit
-- **Matches the pattern** - monitor one task, report once, stop
-
-This is what "in-session loop" means for this project: a monitoring loop that lives in the current session, has clear exit conditions, and is purpose-built for bounded task monitoring rather than indefinite recurring checks.
-
-## Technical Notes: Launch Bug and Fix
-
-### The Problem
-
-Initial attempts to launch `slow_task.bat` as a detached background process failed:
-
-1. `cmd.exe /c "start \"SlowTask\" slow_task.bat"` - didn't detach properly from bash
-2. `powershell Start-Process` - PowerShell runtime errors in this environment
-3. `cmd.exe /c slow_task.bat` with `&` - appeared to launch but never executed batch internals
-4. Windows Task Scheduler - command parsing issues through the bash bridge
-
-**Root cause:** The bash-to-Windows command bridge in this environment doesn't properly execute the internal commands of batch files when invoked via `cmd.exe /c`. The cmd.exe process starts and shows the copyright banner, but the batch file contents never run.
+1. `cmd.exe /c "start ..."` - doesn't detach properly through bash bridge
+2. `powershell Start-Process` - PowerShell runtime errors
+3. `cmd.exe /c batch.bat &` - cmd starts but batch internals don't execute
 
 ### The Solution
 
-Use a bash script (`slow_task.sh`) instead of a batch file, and launch it using the Bash tool's `run_in_background: true` flag. This works reliably because:
+Use a bash script (`slow_task.sh`) and launch it with Claude Code's Bash tool using `run_in_background: true`. This works because:
 - The bash script runs natively in the bash environment
-- The background execution flag is handled by the harness, not by Windows process management
-- File I/O (writing marker files) works without translation layers
+- Background execution is handled by the Claude Code harness, not Windows process management
+- File I/O works without command bridge translation issues
 
 ### Verification
 
-The `started.txt` marker file immediately confirms whether the task actually launched. If it doesn't appear within a few seconds, the launch method failed.
+The `started.txt` marker confirms the task launched successfully. If it doesn't appear within a few seconds, the launch failed.
 
-## Test Results
+## Expected Results
 
-**Successful run:**
-- Task launched at: `Tue, Aug 18, 2026 12:09:52 AM`
-- Completion detected on: Check 4 (~3 minutes)
-- Completion time: `Tue, Aug 18, 2026 12:12:53 AM`
-- Loop status: Success ✓
+**Successful run example:**
+- Task launched: `Tue, Aug 18, 2026 12:09:52 AM`
+- Loop checks: 1, 2, 3, 4...
+- Detection: Check 4 (~3 minutes)
+- Completion: `Tue, Aug 18, 2026 12:12:53 AM`
+- Status: ✓ Success
 
-## Use Cases
+## Learning Outcomes
 
-This pattern is useful for:
-- Long-running builds or tests
-- Deployment monitoring
-- Background data processing
-- Any task that takes minutes to hours where you want automated completion detection
-- Avoiding timeout issues in interactive sessions or CI/CD pipelines
+By completing this project, you'll understand:
+- How to use `/loop` for recurring in-session tasks
+- How to monitor long-running background processes
+- How to implement safety limits in loops
+- How to combine recurring execution with bounded monitoring
+- How to handle background task launch in hybrid Windows/bash environments
+
+---
+
+**Next Steps:** Try modifying the check interval (30s, 2m) or the safety limit (10 checks, 20 checks) to see how the system behaves!
