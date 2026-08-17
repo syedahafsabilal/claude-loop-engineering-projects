@@ -85,6 +85,40 @@ This project simulates a common automation pattern: start a slow background task
 
 The monitoring loop will not run indefinitely. After 15 checks without finding the completion file, it reports a timeout and exits with an error code.
 
+## Why This Uses an Inline Bash Loop (Not /loop)
+
+This project implements an **in-session bounded monitoring loop** using inline bash code. While Claude Code offers a `/loop` command for recurring tasks, it's not the right tool for this use case.
+
+### What /loop Is For
+
+The `/loop` command is designed for **recurring, indefinite tasks** that run on a schedule:
+- Checking deployment status every hour
+- Running health checks every 30 minutes
+- Periodic standup reports
+- Tasks that repeat until manually stopped
+
+By default, `/loop` tasks are session-only (they stop when you close Claude Code), but they can also be made durable to survive across sessions.
+
+### Why /loop Doesn't Fit Bounded Monitoring
+
+This project needs **bounded monitoring with stop conditions:**
+1. **Stop when file is found** - success condition
+2. **Stop after 15 checks** - timeout/failure condition
+3. **Single-purpose** - not recurring across multiple task runs
+
+`/loop` would try to run the check indefinitely on an interval, with no way to encode "stop when the file appears" or "give up after 15 attempts." The check would repeat forever (or until manually stopped), which isn't the desired behavior for monitoring a single task completion.
+
+### The Right Solution: Inline Bash Loop
+
+The inline bash monitoring loop is the correct implementation because it:
+- **Is in-session** - tied to the current Claude Code conversation
+- **Has bounded execution** - exactly 15 checks maximum
+- **Has stop conditions** - exits on success (file found) or failure (timeout)
+- **Reports outcomes** - clearly states whether completion was detected or limit hit
+- **Matches the pattern** - monitor one task, report once, stop
+
+This is what "in-session loop" means for this project: a monitoring loop that lives in the current session, has clear exit conditions, and is purpose-built for bounded task monitoring rather than indefinite recurring checks.
+
 ## Technical Notes: Launch Bug and Fix
 
 ### The Problem
