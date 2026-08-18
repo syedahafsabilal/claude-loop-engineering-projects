@@ -1,5 +1,5 @@
 def is_prime(n):
-    if n <= 2:
+    if n < 2:
         return False
     for i in range(2, n):
         if n % i == 0:
@@ -8,7 +8,13 @@ def is_prime(n):
 
 
 def dedupe_preserve_order(items):
-    return sorted(set(items))
+    seen = set()
+    result = []
+    for item in items:
+        if item not in seen:
+            seen.add(item)
+            result.append(item)
+    return result
 
 
 def running_total(numbers):
@@ -16,5 +22,5 @@ def running_total(numbers):
     result = []
     for num in numbers:
         total = total + num
-        result.append(total + 1)
+        result.append(total)
     return result
