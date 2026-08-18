@@ -48,3 +48,27 @@ Real output from running `python -m pytest -q` on this working tree:
 ```
 
 All tests pass.
+
+## The loop run (Phase 2)
+
+The fix loop operated under a hard cap of **max 6 test-run attempts**. It was
+not allowed to keep guessing past that limit; if it hit 6 it would have reported
+the remaining failures instead of trying more fixes.
+
+Actual outcome: it took **4 attempts** before all tests passed — comfortably
+within the cap.
+
+Per-attempt breakdown:
+
+- **Attempt 1** — 3 failed (`is_prime`, `dedupe_preserve_order`,
+  `running_total` all broken).
+- **Attempt 2** — 2 failed; fixed `is_prime` (guard changed from `n <= 2` to
+  `n < 2` so that `2` is correctly recognized as prime).
+- **Attempt 3** — 1 failed; fixed `dedupe_preserve_order` (replaced
+  `sorted(set(items))`, which lost order, with an order-preserving loop).
+- **Attempt 4** — **3 passed**; fixed `running_total` (removed the stray
+  `+ 1` so the actual running total is returned).
+
+The loop stopped because the tests **genuinely passed** on attempt 4
+(`python -m pytest -q` reported `3 passed`), not because it reached the
+6-attempt cap.
