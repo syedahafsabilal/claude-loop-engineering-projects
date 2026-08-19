@@ -6,6 +6,10 @@ This project demonstrates an **event-driven code-review loop**: opening or
 updating a pull request automatically triggers [OpenCode](https://opencode.ai)
 to review the changes and post its findings as a comment on the PR.
 
+> **Test note:** This README is being used to test the automated PR-review
+> workflow — a small, harmless edit to `project-6/README.md` triggers the
+> `opencode-pr-review` workflow on a PR (and again on each `synchronize` push).
+
 ## What was created inside `project-6/`
 
 | File | Purpose |
