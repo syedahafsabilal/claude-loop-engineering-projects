@@ -1,0 +1,64 @@
+name: opencode-pr-review
+
+# Event-driven PR review loop for Project 6.
+#
+# This workflow runs OpenCode as an automated reviewer whenever a pull request
+# that touches `project-6/` is opened, pushed to again (synchronize = the
+# "heartbeat"), or reopened. OpenCode reads the diff, inspects the code, and
+# posts its review as a comment on the PR.
+#
+# IMPORTANT: GitHub only executes workflows stored at the repository root under
+# `.github/workflows/`. This file is kept inside `project-6/` as the canonical
+# artifact; copy it to `.github/workflows/opencode-review.yml` at the repo root
+# to activate it (see `scripts/install-workflow.ps1`).
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'project-6/**'
+
+permissions:
+  id-token: write        # required for OpenCode authentication
+  contents: read
+  pull-requests: write  # allow OpenCode to post the review comment
+  issues: read
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Run OpenCode PR review
+        uses: anomalyco/opencode/github@latest
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          model: openrouter/anthropic/claude-3.5-sonnet
+          use_github_token: true
+          prompt: |
+            You are an automated code reviewer for a pull request that modifies
+            code under `project-6/`.
+
+            Steps:
+            1. Read the full contents of `project-6/calculator.py` (and any
+               other changed files under `project-6/`) for proper context —
+               do not rely on the diff alone.
+            2. Look specifically for the *planted bug*: a deliberately inserted
+               logic error such as an inverted comparison, wrong operator, or
+               off-by-one mistake. In this exercise the bug is in `max_value`,
+               which returns the minimum instead of the maximum because it uses
+               `if v < result` where it should use `if v > result`.
+            3. For every real issue, post a review comment that names the file,
+               the approximate line number, explains the bug in one sentence,
+               and gives a concrete suggested fix in a code block.
+            4. If you find no real bugs, post a short "LGTM" comment and nothing
+               else.
+
+            Be precise and concise. The goal is to demonstrate an event-driven
+            review that reliably catches the planted bug.
