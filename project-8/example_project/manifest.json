@@ -1,0 +1,10 @@
+{
+  "name": "example-app",
+  "version": "1.0.0",
+  "dependencies": {
+    "left-pad": "1.0.0",
+    "lodash": "4.17.0",
+    "express": "3.0.0",
+    "good-dep": "2.1.0"
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "worktree_backend": "copy",
+  "max_iterations": 1000,
+  "max_runtime_seconds": 3600,
+  "max_changes_per_run": 5,
+  "allow_major": false,
+  "dry_run": true,
+  "interval_seconds": 60,
+  "github_token_env": "GITHUB_TOKEN",
+  "github_repo": null
+}
