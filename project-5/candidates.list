@@ -1,0 +1,4 @@
+# candidate-name    path-to-fix-script
+candidate-1        candidates/candidate-1.sh
+candidate-2        candidates/candidate-2.sh
+candidate-3        candidates/candidate-3.sh
