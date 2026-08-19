@@ -1,0 +1,6 @@
+2026-08-19T22:57:17 | INFO | loop start | cadence=3s max_attempts=3 prompt_file=nonexistent_prompt.txt
+2026-08-19T22:57:17 | INFO | estimated monthly cost = $5616.00 (based on expected usage at current cadence)
+2026-08-19T22:57:17 | FAILURE | attempt 1 | task file missing: nonexistent_prompt.txt | reason: the loop's prompt source does not exist, so no work could be performed | input_tokens=0 output_tokens=0 cost=$0.000000
+2026-08-19T22:57:20 | FAILURE | attempt 2 | task file missing: nonexistent_prompt.txt | reason: the loop's prompt source does not exist, so no work could be performed | input_tokens=0 output_tokens=0 cost=$0.000000
+2026-08-19T22:57:23 | FAILURE | attempt 3 | task file missing: nonexistent_prompt.txt | reason: the loop's prompt source does not exist, so no work could be performed | input_tokens=0 output_tokens=0 cost=$0.000000
+2026-08-19T22:57:23 | FAILURE | loop exhausted 3 attempts without success | reason: required prompt file 'nonexistent_prompt.txt' is missing (deliberate sabotage) | human intervention required
