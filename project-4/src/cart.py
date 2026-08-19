@@ -20,7 +20,7 @@ def subtotal(items):
 
 
 def apply_discount(subtotal_amount):
-    if subtotal_amount > 100:
+    if subtotal_amount >= 100:
         return subtotal_amount * 0.90
     return subtotal_amount
 
