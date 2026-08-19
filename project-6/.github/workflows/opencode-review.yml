@@ -28,12 +28,17 @@ jobs:
   review:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          persist-credentials: false
-          submodules: false
-          clean: false
+      - name: Checkout repository (no submodules)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config --global --add safe.directory "$PWD"
+          git config --global submodule.recurse false
+          git config --global http.https://github.com/.extraheader "AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 -w0)"
+          git init -q .
+          git remote add origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          git fetch --depth=1 "+refs/pull/${{ github.event.pull_request.number }}/merge:refs/remotes/origin/pr-merge"
+          git -c submodule.recurse=false checkout "origin/pr-merge"
 
       - name: Run OpenCode PR review
         uses: anomalyco/opencode/github@latest
