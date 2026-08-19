@@ -33,6 +33,7 @@ jobs:
         with:
           persist-credentials: false
           submodules: false
+          clean: false
 
       - name: Run OpenCode PR review
         uses: anomalyco/opencode/github@latest
