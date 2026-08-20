@@ -201,8 +201,8 @@ merged* work, that distinction is preserved.
 ### Project 12 — Capstone Improvement Loop
 - **Purpose:** A second-order loop that reads a week of progress logs, detects
   failures/corrections that recur, and drafts the smallest *rules* change as a
-  PR — never editing the guarded rules file directly — then stops at a human
-  merge gate.
+  PR — never editing the guarded rules file directly — to be reviewed and
+  merged by a human.
 - **Key implementation:** `loop.py` analyzes logs dated after
   `last-processed-date` (2026-08-12) in `dreaming-state.md` and detects the
   recurring failure **`forgot to prefix branch with `claude/`** (count 4;
@@ -216,25 +216,24 @@ merged* work, that distinction is preserved.
   the proposal, pushes, and opens a PR via the `gh` CLI. Only after the PR is
   created successfully does it advance `dreaming-state.md` (recording the PR
   number/URL) on that same branch. **The loop never modifies `rules/rules.md`;
-  the proposed change is applied only if a human merges the PR** (the human
-  review/merge requirement). Safety gates preserved: evidence-first (a proposal
+  the proposed change was reviewed and merged when PR #4 was merged into `main`**
+  (the human review/merge step). Safety gates preserved: evidence-first (a proposal
   requires `failure`, `run_ids`, `dates`, `count >= 2`, and non-empty
   `evidence`), exactly-one deletion, a no-reviewable-change guard (refuses an
   empty diff), and a `gh` availability check.
 - **Engineering concepts:** second-order improvement, evidence-first gating,
   exactly-one deletion, no-reviewable-change safety, GitHub PR workflow,
-  branch/commit isolation, and a human merge gate (proposed rules land only on
-  human merge of PR #4).
+  branch/commit isolation, and a human merge gate that was passed when PR #4 was
+  reviewed and merged into `main`.
 - **Verification / results:** The automated PR phase **completed and created PR
   #4** (`https://github.com/syedahafsabilal/claude-loop-engineering-projects/pull/4`),
-  recorded on the PR branch's `dreaming-state.md` (`last-pr-number: 4`) and
-  consistent with the `cf59978` "advance dreaming-state after PR creation"
-  commit, which runs only after a successful PR creation. On the PR branch,
-  `dreaming-state.md` was advanced to **2026-08-19**. The proposed R7/R6 changes
-  are **NOT merged into `main`** (`main`'s `rules/rules.md` still contains only
-  R1–R6; there is no merge commit for PR #4). The workflow intentionally stops
-  at the human merge gate: the rules change takes effect only when a person
-  reviews and merges PR #4. The loop's test suite passes (27 tests).
+  recorded on the PR branch's `dreaming-state.md` (`last-pr-number: 4`). PR #4
+  was reviewed and **merged into `main`** (merge commit `97ac8e1`), completing
+  the full workflow: analysis → `claude/` branch → proposal → push → PR #4 →
+  human review → merge. On merge, `dreaming-state.md` was advanced to
+  **2026-08-19** and records PR #4. The proposed rule change (R7 guard; R6
+  deletion) was reviewed and merged as PR #4. The loop's test suite passes (27
+  tests).
 
 ## Engineering Progression
 
@@ -332,10 +331,10 @@ workflow:
 | 10 | RUN 1 baseline complete: environment-only secret handling shown. |
 | 11 | Complete: human-gated two-routine loop; A6 checklist 10/10 PASS;
 |   | no push performed. |
-| 12 | Implemented & executed end-to-end: analysis → `claude/` branch →
-|   | push → **PR #4 created**; `dreaming-state` advanced to 2026-08-19
-|   | on the PR branch. **Proposed R7/R6 changes are NOT merged** — the
-|   | workflow stops at the human merge gate (PR #4 awaits review). |
+| 12 | Implemented & executed end-to-end and **completed**: analysis →
+|   | `claude/` branch → push → PR #4 → human review → **merged into `main`**
+|   | (commit `97ac8e1`); `dreaming-state` advanced to 2026-08-19. The proposed
+|   | R7/R6 rule change was reviewed and merged as PR #4. |
 
 *This README documents what the repository actually contains and shows. Claims
 about merges, PRs, and test results are grounded in the project READMEs, source,
