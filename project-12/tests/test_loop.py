@@ -353,5 +353,37 @@ class TestRealGitPhase(unittest.TestCase):
         self.assertFalse(_git(self.root, "diff", "--name-only", "main.." + branch).stdout.strip())
 
 
+class TestBaselineCleanliness(unittest.TestCase):
+    """The committed baseline must NOT contain the loop's own generated output
+    artifacts. write_change_files (loop.py) produces exactly:
+
+        analysis/proposal.md
+        analysis/rules-proposal.diff
+        analysis/proposed-rules.md
+
+    These belong only on the claude/ PR branch. If they are committed to main,
+    every real run regenerates identical content, git stages nothing, and the
+    no-reviewable-change guard (correctly) aborts with an empty diff -- which is
+    exactly the blockage we hit. Keeping them out of the baseline is what lets
+    the final autonomous run produce a genuine reviewable diff. This test pins
+    that invariant so it cannot silently regress."""
+
+    def test_baseline_has_no_generated_artifacts(self):
+        repo_root = os.path.dirname(PROJECT_DIR)
+        out = subprocess.run(
+            ["git", "-C", repo_root, "ls-files", "project-12/analysis"],
+            capture_output=True, text=True)
+        tracked = set(out.stdout.split())
+        generated = {
+            "project-12/analysis/proposal.md",
+            "project-12/analysis/rules-proposal.diff",
+            "project-12/analysis/proposed-rules.md",
+        }
+        for g in generated:
+            self.assertNotIn(
+                g, tracked,
+                "baseline must not track generated artifact %s" % g)
+
+
 if __name__ == "__main__":
     unittest.main()
