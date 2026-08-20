@@ -8,13 +8,21 @@ All tests read only from project-12/ and assert that protected files
 
 import os
 import re
+import shutil
+import subprocess
 import sys
+import tempfile
 import unittest
 
 PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, PROJECT_DIR)
 
 import loop  # noqa: E402
+
+
+def _git(repo, *args):
+    return subprocess.run(["git", "-C", repo, *args],
+                         capture_output=True, text=True)
 
 RULES_FILE = os.path.join(PROJECT_DIR, "rules", "rules.md")
 STATE_FILE = os.path.join(PROJECT_DIR, "dreaming-state.md")
@@ -113,8 +121,9 @@ class FakeGitHub:
 
 
 class FakeGit:
-    def __init__(self, current="main"):
+    def __init__(self, current="main", staged=True):
         self.current = current
+        self.staged = staged
         self.branch_created = None
         self.added = []
         self.committed = False
@@ -126,6 +135,9 @@ class FakeGit:
 
     def add(self, paths):
         self.added.extend(paths)
+
+    def has_staged_changes(self):
+        return self.staged
 
     def commit(self, msg):
         self.committed = True
@@ -140,6 +152,19 @@ class FakeState:
 
     def __call__(self, new_date, pr_number, pr_url):
         self.calls.append((new_date, pr_number, pr_url))
+
+
+class RecordingState:
+    """Like FakeState but also writes the file, so the post-PR state-update
+    commit carries a real diff (mirrors production's real state_writer)."""
+
+    def __init__(self, path):
+        self.path = path
+        self.calls = []
+
+    def __call__(self, new_date, pr_number, pr_url):
+        self.calls.append((new_date, pr_number, pr_url))
+        loop.update_dreaming_state(self.path, new_date, pr_number, pr_url)
 
 
 class TestPrPhase(unittest.TestCase):
@@ -231,6 +256,101 @@ class TestPrPhase(unittest.TestCase):
         self.assertIsNone(git.branch_created)
         self.assertEqual(st.calls, [])
         self.assertEqual(gh.calls, [])
+
+
+class TestNoReviewableChange(unittest.TestCase):
+    """Reproduces the original failure: deterministic proposal artifacts that
+    already exist on the base branch yield 'nothing to commit'. After the fix
+    this is a clear, non-crashing NoReviewableChangeError (not a misleading
+    'git commit failed')."""
+
+    def setUp(self):
+        self.result = loop.analyze()
+
+    def test_nothing_to_commit_raises_clear_error(self):
+        gh, git, st = FakeGitHub(), FakeGit(staged=False), FakeState()
+        with self.assertRaises(loop.NoReviewableChangeError):
+            loop.execute_phase(self.result, gh, git, st)
+        # no PR and no state advance were attempted
+        self.assertEqual(gh.calls, [])
+        self.assertEqual(st.calls, [])
+
+
+class TestRealGitPhase(unittest.TestCase):
+    """End-to-end PR phase against a REAL temporary git repository, so the
+    'nothing to commit' / real-diff behaviour is exercised through actual git."""
+
+    def setUp(self):
+        self.result = loop.analyze()
+        self.root = tempfile.mkdtemp(prefix="p12-repo-")
+        self.remote = tempfile.mkdtemp(prefix="p12-remote-")
+        self.analysis_dir = os.path.join(self.root, "analysis")
+
+        _git(self.remote, "init", "-q", "--bare")
+        _git(self.root, "init", "-q")
+        _git(self.root, "config", "user.email", "test@example.com")
+        _git(self.root, "config", "user.name", "Test Loop")
+        _git(self.root, "remote", "add", "origin", self.remote)
+        with open(os.path.join(self.root, "seed.txt"), "w") as f:
+            f.write("seed\n")
+        with open(os.path.join(self.root, "dreaming-state.md"), "w") as f:
+            f.write("- **last-processed-date**: 2026-08-12\n")
+        _git(self.root, "add", ".")
+        _git(self.root, "commit", "-qm", "init")
+        _git(self.root, "branch", "-M", "main")
+
+    def tearDown(self):
+        shutil.rmtree(self.root, ignore_errors=True)
+        shutil.rmtree(self.remote, ignore_errors=True)
+
+    def _run(self):
+        # FakeGitHub succeeds; real LocalGit on the temp repo.
+        gh = FakeGitHub()
+        git = loop.LocalGit(root=self.root)
+        st = RecordingState(os.path.join(self.root, "dreaming-state.md"))
+        branch = "claude/" + loop.slugify(self.result["rf_props"][0]["failure"])
+        out = loop.execute_phase(
+            self.result, gh, git, st,
+            base_branch="main",
+            state_file=os.path.join(self.root, "dreaming-state.md"),
+            analysis_dir=self.analysis_dir)
+        return out, gh, st, branch
+
+    def test_valid_run_produces_real_diff(self):
+        out, gh, st, branch = self._run()
+        # PR created and state advanced
+        self.assertEqual(len(gh.calls), 1)
+        self.assertEqual(len(st.calls), 1)
+        # branch exists with a non-empty diff vs main (real reviewable change)
+        self.assertEqual(_git(self.root, "rev-parse", "--verify", branch).returncode, 0)
+        self.assertTrue(_git(self.root, "diff", "--name-only", "main.." + branch).stdout.strip())
+        # the proposal artifacts are actually committed on the branch
+        self.assertEqual(
+            _git(self.root, "cat-file", "-e", "%s:analysis/proposal.md" % branch).returncode, 0)
+
+    def test_polluted_base_blocks_with_clear_error(self):
+        # Pre-seed the base (COMMITTED to main) with the EXACT generated
+        # artifacts so the tree already contains them verbatim. Re-running the
+        # loop must then refuse with a clear error rather than crashing on
+        # 'git commit failed'.
+        loop.write_change_files(self.result, analysis_dir=self.analysis_dir)
+        _git(self.root, "add", ".")
+        _git(self.root, "commit", "-qm", "seed proposal artifacts")
+        gh = FakeGitHub()
+        git = loop.LocalGit(root=self.root)
+        st = RecordingState(os.path.join(self.root, "dreaming-state.md"))
+        branch = "claude/" + loop.slugify(self.result["rf_props"][0]["failure"])
+        with self.assertRaises(loop.NoReviewableChangeError):
+            loop.execute_phase(
+                self.result, gh, git, st,
+                base_branch="main",
+                state_file=os.path.join(self.root, "dreaming-state.md"),
+                analysis_dir=self.analysis_dir)
+        # nothing was pushed or turned into a PR / state advance
+        self.assertEqual(gh.calls, [])
+        # branch exists but carries no diff vs main
+        self.assertEqual(_git(self.root, "rev-parse", "--verify", branch).returncode, 0)
+        self.assertFalse(_git(self.root, "diff", "--name-only", "main.." + branch).stdout.strip())
 
 
 if __name__ == "__main__":
