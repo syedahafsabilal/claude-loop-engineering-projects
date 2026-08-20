@@ -1,0 +1,10 @@
+{
+  "draft_no": 1,
+  "draft_path": "drafts\\draft-1.md",
+  "branch": "a/draft-1",
+  "review_state": "approved",
+  "approved_by": "Hafsa",
+  "approved_via": "approve.py",
+  "approved_at": 1787235462.1289268,
+  "produced_at": 1787234475.3909776
+}

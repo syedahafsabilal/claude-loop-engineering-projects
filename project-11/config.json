@@ -1,0 +1,15 @@
+{
+  "project": "project-11",
+  "state_file": "loop_state.json",
+  "unrestricted_push": false,
+  "enabled_connectors": ["local_http"],
+  "b_api": {
+    "host": "127.0.0.1",
+    "port": 8731,
+    "path": "/trigger"
+  },
+  "limits": {
+    "max_iterations": 10,
+    "max_minutes": 20
+  }
+}

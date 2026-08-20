@@ -1,0 +1,26 @@
+{
+  "state_file_choice": "loop_state.json",
+  "chosen_at": null,
+  "iterations": 1,
+  "deadline": 1787235675.2696881,
+  "limits": {
+    "max_iterations": 10,
+    "max_minutes": 20
+  },
+  "a": {
+    "status": "produced",
+    "draft": "drafts\\draft-1.md",
+    "review_state": "approved",
+    "branch": "a/draft-1"
+  },
+  "b": {
+    "status": "ran",
+    "fired": true,
+    "approved_before_fire": true,
+    "transcript": "b_transcript.log"
+  },
+  "a3": {
+    "token_generated": true,
+    "token_shown_once": false
+  }
+}
