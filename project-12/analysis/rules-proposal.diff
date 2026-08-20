@@ -1,0 +1,9 @@
+--- a/rules/rules.md
++++ b/rules/rules.md
+@@ -25,3 +25,6 @@
+ ### R6 — DEPRECATED: log to /tmp/debug.log
+ Legacy rule: write debug output to `/tmp/debug.log`. This debug workflow
+ was removed; no recent run should need this rule.
++
++### R7 — Guard: loop-created branches must begin with `claude/`
++All branches created by the Project 12 improvement loop must begin with the `claude/` prefix. Reject branch creation that does not match this prefix before any further work proceeds.
