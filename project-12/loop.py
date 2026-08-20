@@ -506,12 +506,14 @@ class GitHubCLI:
 # --------------------------------------------------------------------------
 
 def execute_phase(analysis, github, git, state_writer,
-                  base_branch="main", dry_run=False):
+                  base_branch="main", state_file=STATE_FILE, dry_run=False):
     """Run the GitHub/PR phase.
 
     Order: validate evidence -> validate deletion -> create claude/ branch ->
     write change files -> commit -> push -> create PR -> (only then) advance
-    dreaming-state. Any failure before PR creation leaves state untouched.
+    dreaming-state, committing and pushing that state update on the same branch.
+    Any failure before PR creation leaves state untouched. rules/rules.md is
+    never modified, and nothing is ever merged.
     """
     if dry_run:
         return {"skipped": True}
@@ -537,9 +539,14 @@ def execute_phase(analysis, github, git, state_writer,
     title = "Project 12: propose rule for repeated failure"
     pr = github.create_pr(base=base_branch, head=branch, title=title, body=body)
 
-    # ONLY after PR creation succeeds do we advance dreaming-state.
+    # ONLY after PR creation succeeds do we advance dreaming-state, and we
+    # commit + push that update on the same (claude/) branch. main and
+    # rules/rules.md are never touched by this automation.
     new_date = latest_processed_date(analysis["last_date"])
     state_writer(new_date, pr["number"], pr["url"])
+    git.add([state_file])
+    git.commit("project-12: advance dreaming-state after PR creation")
+    git.push(branch)
     return {"pr": pr, "branch": branch}
 
 
@@ -575,7 +582,7 @@ def main(argv=None):
     state_writer = lambda d, n, u: update_dreaming_state(args.state_file, d, n, u)
     try:
         out = execute_phase(result, github, git, state_writer,
-                            base_branch=args.base)
+                            base_branch=args.base, state_file=args.state_file)
     except Exception as e:
         print("PR phase aborted (dreaming-state NOT advanced): %s" % e,
               file=sys.stderr)
