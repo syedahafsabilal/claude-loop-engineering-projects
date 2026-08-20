@@ -338,6 +338,12 @@ class GitHubUnavailableError(Exception):
     pass
 
 
+class NoReviewableChangeError(Exception):
+    """Raised when the staged proposal artifacts match the base branch, i.e.
+    there is no actual change to commit (so a PR would have an empty diff)."""
+    pass
+
+
 def slugify(text, max_len=40):
     s = re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")
     return s[:max_len] or "improve"
@@ -466,9 +472,20 @@ class LocalGit:
         if r.returncode != 0:
             raise RuntimeError("git add failed: %s" % r.stderr)
 
+    def has_staged_changes(self):
+        # List staged paths; non-empty means there is a real reviewable change.
+        # (Using --name-only is more robust than relying on --quiet's exit code.)
+        r = self._run("diff", "--cached", "--name-only")
+        if r.returncode != 0:
+            raise RuntimeError("git diff --cached failed: %s" % r.stderr)
+        return bool(r.stdout.strip())
+
     def commit(self, msg):
         r = self._run("commit", "-m", msg)
         if r.returncode != 0:
+            if "nothing to commit" in (r.stderr or ""):
+                raise NoReviewableChangeError(
+                    "git commit reported nothing to commit")
             raise RuntimeError("git commit failed: %s" % r.stderr)
 
     def push(self, branch):
@@ -506,7 +523,8 @@ class GitHubCLI:
 # --------------------------------------------------------------------------
 
 def execute_phase(analysis, github, git, state_writer,
-                  base_branch="main", state_file=STATE_FILE, dry_run=False):
+                  base_branch="main", state_file=STATE_FILE,
+                  analysis_dir=ANALYSIS_DIR, dry_run=False):
     """Run the GitHub/PR phase.
 
     Order: validate evidence -> validate deletion -> create claude/ branch ->
@@ -530,9 +548,9 @@ def execute_phase(analysis, github, git, state_writer,
     git.create_branch(branch)
 
     # Never modify rules/rules.md here; only write proposal + diff.
-    paths = write_change_files(analysis)
-    git.add(paths)
-    git.commit("project-12: draft rules improvement from repeated-failure analysis")
+    paths = write_change_files(analysis, analysis_dir=analysis_dir)
+    add_and_commit_if_changed(git, paths,
+                              "project-12: draft rules improvement from repeated-failure analysis")
     git.push(branch)
 
     body = build_pr_body(analysis)
@@ -544,10 +562,26 @@ def execute_phase(analysis, github, git, state_writer,
     # rules/rules.md are never touched by this automation.
     new_date = latest_processed_date(analysis["last_date"])
     state_writer(new_date, pr["number"], pr["url"])
-    git.add([state_file])
-    git.commit("project-12: advance dreaming-state after PR creation")
+    add_and_commit_if_changed(git, [state_file],
+                              "project-12: advance dreaming-state after PR creation")
     git.push(branch)
     return {"pr": pr, "branch": branch}
+
+
+def add_and_commit_if_changed(git, paths, msg):
+    """Stage paths and commit only if they actually change the tree.
+
+    Guarantees the improvement branch carries a real, reviewable diff before
+    `git commit` is attempted. Raises NoReviewableChangeError (rather than the
+    misleading 'git commit failed') when the generated artifacts are identical
+    to what is already on the base branch.
+    """
+    git.add(paths)
+    if not git.has_staged_changes():
+        raise NoReviewableChangeError(
+            "generated proposal artifacts match the base branch; there is no "
+            "reviewable change to commit. Aborting PR creation.")
+    git.commit(msg)
 
 
 def main(argv=None):
@@ -582,7 +616,8 @@ def main(argv=None):
     state_writer = lambda d, n, u: update_dreaming_state(args.state_file, d, n, u)
     try:
         out = execute_phase(result, github, git, state_writer,
-                            base_branch=args.base, state_file=args.state_file)
+                            base_branch=args.base, state_file=args.state_file,
+                            analysis_dir=args.analysis_dir)
     except Exception as e:
         print("PR phase aborted (dreaming-state NOT advanced): %s" % e,
               file=sys.stderr)
