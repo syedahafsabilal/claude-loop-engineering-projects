@@ -13,6 +13,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, PROJECT_DIR)
@@ -383,6 +384,58 @@ class TestBaselineCleanliness(unittest.TestCase):
             self.assertNotIn(
                 g, tracked,
                 "baseline must not track generated artifact %s" % g)
+
+
+class TestGitHubCliPrCreate(unittest.TestCase):
+    """Regression test for the `gh pr create` fix.
+
+    The installed GitHub CLI (2.97.0) rejects `gh pr create --json ...`, so the
+    old code crashed with 'unknown flag: --json'. The fix removes that flag and
+    derives the PR number from the URL that `gh pr create` prints to stdout.
+    These tests drive the REAL GitHubCLI.create_pr via a mocked subprocess so we
+    prove the supported invocation is used and the URL/number are captured."""
+
+    def _run_create_pr(self, stdout, returncode=0, stderr=""):
+        fake = subprocess.CompletedProcess(
+            ["gh", "pr", "create"], returncode, stdout, stderr)
+        with mock.patch("subprocess.run", return_value=fake):
+            return loop.GitHubCLI().create_pr(
+                "main", "claude/x", "title", "body")
+
+    def test_parses_url_and_number_from_stdout(self):
+        pr = self._run_create_pr("https://github.com/owner/repo/pull/123\n")
+        self.assertEqual(pr["number"], 123)
+        self.assertEqual(pr["url"], "https://github.com/owner/repo/pull/123")
+
+    def test_number_extracted_from_multiline_output(self):
+        out = ("Creating pull request for claude/x into main in owner/repo\n"
+               "https://github.com/owner/repo/pull/7\n")
+        pr = self._run_create_pr(out)
+        self.assertEqual(pr["number"], 7)
+        self.assertEqual(pr["url"], "https://github.com/owner/repo/pull/7")
+
+    def test_no_json_flag_is_used(self):
+        captured = {}
+
+        def fake_run(args, *a, **k):
+            captured["args"] = list(args)
+            return subprocess.CompletedProcess(
+                args, 0, "https://github.com/owner/repo/pull/9\n", "")
+
+        with mock.patch("subprocess.run", side_effect=fake_run):
+            pr = loop.GitHubCLI().create_pr("main", "claude/x", "t", "b")
+        self.assertEqual(pr["number"], 9)
+        self.assertNotIn("--json", captured["args"],
+                         "unsupported --json flag must not be passed to gh pr create")
+
+    def test_failure_raises_clear_error(self):
+        with self.assertRaises(RuntimeError):
+            self._run_create_pr("", returncode=1,
+                                stderr="unknown flag: --json\n")
+
+    def test_missing_url_in_output_raises(self):
+        with self.assertRaises(RuntimeError):
+            self._run_create_pr("warning: something odd happened\n", returncode=0)
 
 
 if __name__ == "__main__":

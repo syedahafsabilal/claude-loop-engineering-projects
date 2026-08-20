@@ -15,7 +15,6 @@ import argparse
 import difflib
 import glob
 import hashlib
-import json
 import os
 import re
 import shutil
@@ -510,12 +509,20 @@ class GitHubCLI:
     def create_pr(self, base, head, title, body):
         r = subprocess.run(
             ["gh", "pr", "create", "--base", base, "--head", head,
-             "--title", title, "--body", body, "--json", "number,url"],
+             "--title", title, "--body", body],
             capture_output=True, text=True)
         if r.returncode != 0:
             raise RuntimeError("gh pr create failed: %s" % r.stderr)
-        data = json.loads(r.stdout)
-        return {"number": data["number"], "url": data["url"]}
+        # `gh pr create` prints the new PR's URL to stdout (gh >= 2.x); the PR
+        # number is the final numeric segment of that URL. We no longer pass
+        # the unsupported `--json` flag (removed: gh 2.97 `pr create` rejects
+        # it), so we derive the number from the URL instead.
+        url = (r.stdout or r.stderr).strip().splitlines()[-1].strip()
+        m = re.search(r"/pull/(\d+)", url)
+        if not m:
+            raise RuntimeError(
+                "gh pr create succeeded but no PR URL in output: %r" % (r.stdout,))
+        return {"number": int(m.group(1)), "url": url}
 
 
 # --------------------------------------------------------------------------
