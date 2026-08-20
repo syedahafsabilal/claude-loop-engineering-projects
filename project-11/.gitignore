@@ -1,0 +1,7 @@
+# Secret material is never tracked.
+secrets/
+
+# Runtime transcripts / local server artifacts are local-only.
+b_transcript.log
+__pycache__/
+*.pyc
